@@ -3,6 +3,8 @@ import type { SVGProps } from 'react'
 import * as Checkbox from '@radix-ui/react-checkbox'
 
 import { api } from '@/utils/client/api'
+import { useState } from 'react'
+import { motion } from 'framer-motion'
 
 /**
  * QUESTION 3:
@@ -62,19 +64,48 @@ import { api } from '@/utils/client/api'
  * Documentation references:
  *  - https://auto-animate.formkit.com
  */
-
-export const TodoList = () => {
-  const { data: todos = [] } = api.todo.getAll.useQuery({
-    statuses: ['completed', 'pending'],
+interface Todo {
+  id: number
+  status: 'completed' | 'pending'
+  body: string
+}
+export const TodoList = ({ status }: { status: string }) => {
+  const todosQuery = api.todo.getAll.useQuery({
+    statuses:
+      status === 'All'
+        ? ['completed', 'pending']
+        : ([status.toLowerCase()] as ('completed' | 'pending')[]),
   })
+  const { data: todos = [] } = todosQuery
+  const updateTodoStatus = api.todoStatus.update.useMutation()
 
+  const handleStatusChange = async (todo: Todo) => {
+    console.log('todo', todo)
+    const newStatus = todo.status === 'completed' ? 'pending' : 'completed'
+    await updateTodoStatus.mutateAsync({ todoId: todo.id, status: newStatus })
+    // Refresh the todos list after updating the status
+    todosQuery.refetch()
+  }
+  const deleteTodoMutation = api.todo.delete.useMutation()
+
+  const deleteTodo = async (id: number) => {
+    await deleteTodoMutation.mutateAsync({ id })
+    todosQuery.refetch()
+  }
   return (
     <ul className="grid grid-cols-1 gap-y-3">
-      {todos.map((todo) => (
-        <li key={todo.id}>
-          <div className="flex items-center rounded-12 border border-gray-200 px-4 py-3 shadow-sm">
+      {todos.map((todo: Todo) => (
+        <motion.li
+          key={todo.id}
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 10 }}
+        >
+          <div className="flex items-center  rounded-12 border border-gray-200 px-4 py-3 shadow-sm">
             <Checkbox.Root
               id={String(todo.id)}
+              checked={todo.status === 'completed'}
+              onClick={() => handleStatusChange(todo)}
               className="flex h-6 w-6 items-center justify-center rounded-6 border border-gray-300 focus:border-gray-700 focus:outline-none data-[state=checked]:border-gray-700 data-[state=checked]:bg-gray-700"
             >
               <Checkbox.Indicator>
@@ -82,11 +113,19 @@ export const TodoList = () => {
               </Checkbox.Indicator>
             </Checkbox.Root>
 
-            <label className="block pl-3 font-medium" htmlFor={String(todo.id)}>
+            <label
+              className={`block pl-3 font-medium ${
+                todo.status === 'completed' ? 'text-gray-500 line-through' : ''
+              }`}
+              htmlFor={String(todo.id)}
+            >
               {todo.body}
             </label>
+            <button className="ml-auto" onClick={() => deleteTodo(todo.id)}>
+              <XMarkIcon className="h-4 w-4 text-gray-500" />
+            </button>
           </div>
-        </li>
+        </motion.li>
       ))}
     </ul>
   )
